@@ -1,17 +1,43 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { config } from "./config.js";
 const app = express();
 const PORT = 8080;
 // Compute __dirname for ES module scope
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Serve the assets folder at /assets
-app.use("/assets", express.static(path.join(__dirname, "..", "assets")));
-// Serve index.html at the root
-app.get("/", (_req, res) => {
-    res.sendFile(path.join(__dirname, "..", "index.html"));
-});
+function middlewareLogResponses(req, res, next) {
+    res.on("finish", () => {
+        const statusCode = res.statusCode;
+        if (statusCode !== 200) {
+            console.log(`[NON-OK] ${req.method} ${req.url} - Status: ${statusCode}`);
+        }
+    });
+    next();
+}
+function middlewareMetricsInc(_req, _res, next) {
+    config.fileserverHits += 1;
+    next();
+}
+function handlerReadiness(_req, res) {
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send("OK");
+}
+function handlerMetrics(_req, res) {
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send(`Hits: ${config.fileserverHits}`);
+}
+function handlerReset(_req, res) {
+    config.fileserverHits = 0;
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send(`Hits: ${config.fileserverHits}`);
+}
+app.use(middlewareLogResponses);
+app.get("/api/healthz", handlerReadiness);
+app.use("/app", middlewareMetricsInc, express.static(path.join(__dirname, "..", "src", "app")));
+app.get("/api/metrics", handlerMetrics);
+app.get("/api/reset", handlerReset);
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
