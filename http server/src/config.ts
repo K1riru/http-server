@@ -35,3 +35,4 @@ export const config: { api: APIConfig; db: DBConfig } = {
     migrationConfig,
   },
 };
+
