@@ -1,4 +1,4 @@
-console.log("RUNNING NEW FILE ");
+
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -143,7 +143,7 @@ async function handlerCreateUser(req: Request, res: Response, next: NextFunction
 
 async function handlerCreateChirp(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = req.body as { body?: string; userId?: string; } | undefined;
+    const body = req.body as { body?: string; userId?: string; };
     const chirpBody = typeof body === "object" && body !== null ? body.body : undefined;
 
     if (typeof chirpBody !== "string") {
