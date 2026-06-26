@@ -1,3 +1,4 @@
+console.log("RUNNING NEW FILE ");
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
