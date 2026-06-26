@@ -1,4 +1,4 @@
-console.log("RUNNING NEW FILE ");
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
