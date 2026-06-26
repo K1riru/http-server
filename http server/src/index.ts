@@ -5,11 +5,13 @@ import { config } from "./config.js";
 import postgres from "postgres";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { createChirp } from "./db/queries/chirps.js";
 
 const migrationClient = postgres(config.db.url, { max: 1 });
 await migrate(drizzle(migrationClient), config.db.migrationConfig);
 
 const app = express();
+app.use(express.json());
 const PORT = 8080;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -117,35 +119,7 @@ async function handlerReset(_req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
-
-async function handlerValidateChirp(req: Request, res: Response, next: NextFunction) {
-  try {
-    const body = req.body as { body?: string } | undefined;
-    const chirp = typeof body === "object" && body !== null ? body.body : undefined;
-
-    if (typeof chirp !== "string") {
-      throw new BadRequestError("Something went wrong");
-    }
-
-    if (chirp.length > 140) {
-      throw new BadRequestError("Chirp is too long. Max length is 140");
-    }
-
-    const profaneWords = ["kerfuffle", "sharbert", "fornax"];
-    const words = chirp.split(" ");
-    const cleanedWords = words.map((word) => {
-      const normalizedWord = word.toLowerCase();
-      if (profaneWords.includes(normalizedWord)) {
-        return "****";
-      }
-      return word;
-    });
-
-    res.status(200).json({ cleanedBody: cleanedWords.join(" ") });
-  } catch (err) {
-    next(err);
-  }
-}
+  
 
 async function handlerCreateUser(req: Request, res: Response, next: NextFunction) {
   try {
@@ -166,18 +140,54 @@ async function handlerCreateUser(req: Request, res: Response, next: NextFunction
 }
 
 
-function handlerChirp(req: Request, res: Response, next: NextFunction) {}
+async function handlerCreateChirp(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = req.body as { body?: string; userId?: string; } | undefined;
+    const chirpBody = typeof body === "object" && body !== null ? body.body : undefined;
+
+    if (typeof chirpBody !== "string") {
+      throw new BadRequestError("Something went wrong");
+    }
+
+    if (chirpBody.length > 140) {
+      throw new BadRequestError("Chirp is too long. Max length is 140");
+    }
+
+    const userId = typeof body === "object" && body !== null ? body.userId : undefined;
+    if (typeof userId !== "string") {
+      throw new BadRequestError("Missing or invalid userId");
+    }
+
+    const profaneWords = ["kerfuffle", "sharbert", "fornax"];
+    const words = chirpBody.split(" ");
+    const cleanedWords = words.map((word) => {
+      const normalizedWord = word.toLowerCase();
+      if (profaneWords.includes(normalizedWord)) {
+        return "****";
+      }
+      return word;
+    });
+    const cleanedBody = cleanedWords.join(" ");
+
+    const createdChirp = await createChirp({ body: cleanedBody, userId});
+
+    res.status(201).json(createdChirp);
+  } catch (err) {
+    next(err);
+  }
+}
 
 app.use(middlewareLogResponses);
-app.use(express.json());
-app.get("/api/healthz", handlerReadiness);
 app.use("/app", middlewareMetricsInc, express.static(path.join(__dirname, "..", "src", "app")));
+app.get("/api/healthz", handlerReadiness);
+
 app.get("/admin/metrics", handlerMetrics);
 app.post("/admin/reset", handlerReset);
-app.post("/api/validate_chirp", handlerValidateChirp);
 app.post("/api/users", handlerCreateUser);
+app.post("/api/chirps", handlerCreateChirp);
+
+
 app.use(middlewareErrorHandler);
-app.post("/api/chirps", handlerChirp);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
