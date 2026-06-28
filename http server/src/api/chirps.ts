@@ -3,6 +3,8 @@ import type { Request, Response } from "express";
 import { respondWithJSON } from "./json.js";
 import { createChirp } from "../db/queries/chirps.js";
 import { BadRequestError } from "./errors.js";
+import { getAllChirps } from "../db/queries/chirps.js";
+import { getChirpById } from "../db/queries/chirps.js";
 
 export async function handlerChirpsCreate(req: Request, res: Response) {
   type parameters = {
@@ -43,4 +45,25 @@ function getCleanedBody(body: string, badWords: string[]) {
 
   const cleaned = words.join(" ");
   return cleaned;
+}
+
+export async function handlerGetChirps(req: Request, res: Response, next: Function) {
+    try {
+        const chirps = await getAllChirps();
+        res.status(200).json(chirps);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function handlerGetChirp(req: Request, res: Response) {
+    const chirpId = req.params.chirpId as string;
+    const chirp = await getChirpById(chirpId);
+
+    if (!chirp) {
+        res.status(404).json({ error: "Chirp not found" });
+        return;
+    }
+
+    res.status(200).json(chirp);
 }

@@ -6,6 +6,7 @@ import { respondWithJSON } from "./json.js";
 
 export async function handlerUsersCreate(req: Request, res: Response) {
   type parameters = {
+    password: string;
     email: string;
   };
   const params: parameters = req.body;
@@ -14,7 +15,7 @@ export async function handlerUsersCreate(req: Request, res: Response) {
     throw new BadRequestError("Missing required fields");
   }
 
-  const user = await createUser({ email: params.email });
+  const user = await createUser({ email: params.email});
 
   if (!user) {
     throw new Error("Could not create user");
