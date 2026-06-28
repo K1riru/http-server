@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782483329048,
-      "tag": "0000_grey_shiver_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1782497159646,
-      "tag": "0001_moaning_the_santerians",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1782497776900,
-      "tag": "0002_hesitant_molten_man",
+      "when": 1782653819999,
+      "tag": "0000_freezing_gladiator",
       "breakpoints": true
     }
   ]
