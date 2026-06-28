@@ -1,4 +1,4 @@
-import { db } from "../index.js";
+import { db } from "../clients.js";
 import { chirps } from "../schema.js";
 import type { NewChirp } from "../schema.js";
 

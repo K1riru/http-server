@@ -1,4 +1,4 @@
-import { db } from "../index.js";
+import { db } from "../clients.js";
 import { users, type NewUser } from "../schema.js";
 
 export async function createUser(user: NewUser) {
