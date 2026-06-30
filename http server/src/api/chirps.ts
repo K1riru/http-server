@@ -5,19 +5,39 @@ import { createChirp } from "../db/queries/chirps.js";
 import { BadRequestError } from "./errors.js";
 import { getAllChirps } from "../db/queries/chirps.js";
 import { getChirpById } from "../db/queries/chirps.js";
+import { getBearerToken, validateJWT } from "../auth.js";
+import { config } from "../config.js";
 
 export async function handlerChirpsCreate(req: Request, res: Response) {
+  let token = getBearerToken(req as any);
+
+  const userId = validateJWT(token, config.auth.jwtSecret);
+
   type parameters = {
     body: string;
-    userId: string;
   };
 
   const params: parameters = req.body;
 
   const cleaned = validateChirp(params.body);
-  const chirp = await createChirp({ body: cleaned, userId: params.userId });
-
-  respondWithJSON(res, 201, chirp);
+  
+  try {
+    const chirp = await createChirp({ body: cleaned, userId });
+    respondWithJSON(res, 201, chirp);
+  } catch (err) {
+    console.error("Error creating chirp:", err);
+    
+    // Check if it's a foreign key constraint violation (user doesn't exist)
+    const fkError = err as any;
+    if (fkError.code === "23503" || fkError.detail?.includes("foreign key") || fkError.message?.includes("foreign key")) {
+      throw new BadRequestError(
+        `User with ID ${userId} not found. Please ensure the user exists before creating a chirp.`
+      );
+    }
+    
+    // Re-throw other errors to be handled by error middleware
+    throw err;
+  }
 }
 
 function validateChirp(body: string) {
