@@ -9,7 +9,7 @@ import { getBearerToken, validateJWT } from "../auth.js";
 import { config } from "../config.js";
 
 export async function handlerChirpsCreate(req: Request, res: Response) {
-  let token = getBearerToken(req as any);
+  let token = getBearerToken(req);
 
   const userId = validateJWT(token, config.auth.jwtSecret);
 

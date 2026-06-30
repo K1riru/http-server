@@ -1,7 +1,13 @@
 import type { Request, Response } from "express";
 
-import { createUser, getUserByEmail } from "../db/queries/users.js";
-import { createHashedPassword, hashPassword, makeJWT } from "../auth.js";
+import {
+  createUser,
+  getUserByEmail,
+  createRefreshToken,
+  getUserFromRefreshToken,
+  revokeRefreshToken,
+} from "../db/queries/users.js";
+import { createHashedPassword, hashPassword, makeJWT, makeRefreshToken, getBearerToken } from "../auth.js";
 import { BadRequestError } from "./errors.js";
 import { respondWithJSON } from "./json.js";
 import { config } from "../config.js";
@@ -55,7 +61,15 @@ export async function handlerUsersLogin(req: Request, res: Response) {
 
   // Generate JWT token
   const token = makeJWT(user.id, expiresInSeconds, config.auth.jwtSecret);
+  const refreshToken = makeRefreshToken();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 60);
 
+  await createRefreshToken({
+    token: refreshToken,
+    userId: user.id,
+    expiresAt,
+  });
   // Return a copy of the user without the hashed password and include the token
   respondWithJSON(res, 200, {
     id: user.id,
@@ -63,5 +77,53 @@ export async function handlerUsersLogin(req: Request, res: Response) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     token: token,
+    refreshToken,
   });
+}
+
+export async function handlerRefresh(req: Request, res: Response) {
+  try {
+    const bearerToken = getBearerToken(req);
+
+    const result = await getUserFromRefreshToken(bearerToken);
+
+    if (!result) {
+      respondWithJSON(res, 401, "invalid refresh token");
+      return;
+    }
+
+    // Generate new JWT access token
+    const newAccessToken = makeJWT(result.user.id, 3600, config.auth.jwtSecret);
+
+    respondWithJSON(res, 200, {
+      token: newAccessToken,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Missing Authorization header") {
+      respondWithJSON(res, 401, "missing authorization header");
+    } else if (error instanceof Error && error.message === "Malformed autherization header") {
+      respondWithJSON(res, 401, "malformed authorization header");
+    } else {
+      respondWithJSON(res, 401, "invalid refresh token");
+    }
+    return;
+  }
+}
+
+export async function handlerRevoke(req: Request, res: Response) {
+  try {
+    const bearerToken = getBearerToken(req);
+
+    await revokeRefreshToken(bearerToken);
+
+    res.sendStatus(204);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Missing Authorization header") {
+      res.sendStatus(401);
+    } else if (error instanceof Error && error.message === "Malformed autherization header") {
+      res.sendStatus(401);
+    } else {
+      res.sendStatus(401);
+    }
+  }
 }

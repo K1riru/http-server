@@ -1,9 +1,15 @@
 import * as argon2 from "argon2";
+import crypto from "crypto";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import { Request } from "express";
 
 export async function createHashedPassword(password: string): Promise<string> {
   const hashed = await argon2.hash(password);
   return hashed;
+}
+
+export function makeRefreshToken(): string {
+  return crypto.randomBytes(32).toString("hex");
 }
 
 export function hashPassword(password: string, hash: string): Promise<boolean> {
@@ -35,15 +41,16 @@ function validateJWT(tokenString: string, secret: string): string {
 export { makeJWT, validateJWT };
 
 export function getBearerToken(req: Request): string {
-  const authHeader = req.headers.get("Authorization");
+  const authHeader = req.get("Authorization");
+
   if (!authHeader) {
     throw new Error("Missing Authorization header");
   }
 
-  // Strip "Bearer " prefix if present (handles both standard and test framework formats)
-  if (authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7);
+  const parts = authHeader.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Bearer") {
+    throw new Error("Malformed autherization header");
   }
 
-  return authHeader;
+  return parts[1];
 }
