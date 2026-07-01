@@ -5,8 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782833813617,
-      "tag": "0000_tranquil_doctor_spectrum",
+      "when": 1782844063786,
+      "tag": "0000_daily_spitfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782844063787,
+      "tag": "0001_chirpy_red_membership",
       "breakpoints": true
     }
   ]

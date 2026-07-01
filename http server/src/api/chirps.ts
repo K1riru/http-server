@@ -1,41 +1,40 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 import { respondWithJSON } from "./json.js";
-import { createChirp } from "../db/queries/chirps.js";
+import {
+  createChirp,
+  deleteChirpById,
+  getAllChirps,
+  getChirpById,
+} from "../db/queries/chirps.js";
 import { BadRequestError } from "./errors.js";
-import { getAllChirps } from "../db/queries/chirps.js";
-import { getChirpById } from "../db/queries/chirps.js";
 import { getBearerToken, validateJWT } from "../auth.js";
 import { config } from "../config.js";
 
 export async function handlerChirpsCreate(req: Request, res: Response) {
-  let token = getBearerToken(req);
+  const token = getBearerToken(req);
 
-  const userId = validateJWT(token, config.auth.jwtSecret);
+  let userId: string | null = null;
 
-  type parameters = {
-    body: string;
-  };
+  try {
+    userId = validateJWT(token, config.auth.jwtSecret);
+  } catch {
+    return res.sendStatus(401);
+  }
 
-  const params: parameters = req.body;
+  if (!userId) {
+    return res.sendStatus(401);
+  }
+
+  const params = req.body as { body: string };
 
   const cleaned = validateChirp(params.body);
-  
+
   try {
     const chirp = await createChirp({ body: cleaned, userId });
-    respondWithJSON(res, 201, chirp);
+    return respondWithJSON(res, 201, chirp);
   } catch (err) {
     console.error("Error creating chirp:", err);
-    
-    // Check if it's a foreign key constraint violation (user doesn't exist)
-    const fkError = err as any;
-    if (fkError.code === "23503" || fkError.detail?.includes("foreign key") || fkError.message?.includes("foreign key")) {
-      throw new BadRequestError(
-        `User with ID ${userId} not found. Please ensure the user exists before creating a chirp.`
-      );
-    }
-    
-    // Re-throw other errors to be handled by error middleware
     throw err;
   }
 }
@@ -67,23 +66,81 @@ function getCleanedBody(body: string, badWords: string[]) {
   return cleaned;
 }
 
-export async function handlerGetChirps(req: Request, res: Response, next: Function) {
-    try {
-        const chirps = await getAllChirps();
-        res.status(200).json(chirps);
-    } catch (err) {
-        next(err);
-    }
+type Chirp = Awaited<ReturnType<typeof getAllChirps>>[number];
+type SortOrder = "asc" | "desc";
+
+export function sortChirpsByCreatedAt(chirps: Chirp[], sort: SortOrder) {
+  return [...chirps].sort((a, b) => {
+    const diff = a.createdAt.getTime() - b.createdAt.getTime();
+    return sort === "asc" ? diff : -diff;
+  });
+}
+
+export function getSortOrder(req: Request): SortOrder {
+  const sortQuery = req.query.sort;
+
+  if (typeof sortQuery === "string" && sortQuery === "desc") {
+    return "desc";
+  }
+
+  return "asc";
+}
+
+export async function handlerGetChirps(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const authorIdQuery = req.query.authorId;
+    const authorId = typeof authorIdQuery === "string" ? authorIdQuery : undefined;
+    const sortOrder = getSortOrder(req);
+    const chirps = await getAllChirps(authorId);
+
+    res.status(200).json(sortChirpsByCreatedAt(chirps, sortOrder));
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function handlerGetChirp(req: Request, res: Response) {
-    const chirpId = req.params.chirpId as string;
-    const chirp = await getChirpById(chirpId);
+  const chirpId = req.params.chirpId as string;
+  const chirp = await getChirpById(chirpId);
 
-    if (!chirp) {
-        res.status(404).json({ error: "Chirp not found" });
-        return;
-    }
+  if (!chirp) {
+    res.status(404).json({ error: "Chirp not found" });
+    return;
+  }
 
-    res.status(200).json(chirp);
+  res.status(200).json(chirp);
+}
+
+export async function handlerDeleteChirp(req: Request, res: Response) {
+  let userId: string;
+
+  try {
+    const token = getBearerToken(req);
+    userId = validateJWT(token, config.auth.jwtSecret);
+  } catch {
+    return res.sendStatus(401);
+  }
+
+  const chirpId = req.params.chirpId as string;
+  const chirp = await getChirpById(chirpId);
+
+  if (!chirp) {
+    return res.sendStatus(404);
+  }
+
+  if (chirp.userId !== userId) {
+    return res.sendStatus(403);
+  }
+
+  const deleted = await deleteChirpById(chirpId);
+
+  if (!deleted) {
+    return res.sendStatus(404);
+  }
+
+  return res.sendStatus(204);
 }

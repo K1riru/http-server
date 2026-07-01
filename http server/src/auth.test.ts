@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { makeJWT, validateJWT } from "./auth.js";
+import { makeJWT, validateJWT, getAPIKey } from "./auth.js";
 
 describe("makeJWT", () => {
   const secret = "test-secret-key-12345678901234567890";
@@ -196,5 +196,39 @@ describe("validateJWT - Token Structure Validation", () => {
     // Should still validate and return the sub claim (extra claims don't affect jwt.verify)
     const result = validateJWT(tokenWithExtra, secret);
     expect(result).toBe("test-user");
+  });
+});
+
+describe("getAPIKey", () => {
+  it("should extract the API key from an ApiKey authorization header", () => {
+    const req = {
+      get: (header: string) => (header === "Authorization" ? "ApiKey abc123" : null),
+    };
+
+    expect(getAPIKey(req as any)).toBe("abc123");
+  });
+
+  it("should allow extra whitespace between ApiKey and the key", () => {
+    const req = {
+      get: (header: string) => (header === "Authorization" ? "ApiKey    abc123" : null),
+    };
+
+    expect(getAPIKey(req as any)).toBe("abc123");
+  });
+
+  it("should throw when the authorization header is missing", () => {
+    const req = {
+      get: () => null,
+    };
+
+    expect(() => getAPIKey(req as any)).toThrow("Missing Authorization header");
+  });
+
+  it("should throw when the authorization header uses the wrong scheme", () => {
+    const req = {
+      get: (header: string) => (header === "Authorization" ? "Bearer abc123" : null),
+    };
+
+    expect(() => getAPIKey(req as any)).toThrow("Malformed authorization header");
   });
 });

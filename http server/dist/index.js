@@ -9,8 +9,8 @@ import { errorMiddleWare, middlewareLogResponse, middlewareMetricsInc, } from ".
 import { handlerChirpsCreate } from "./api/chirps.js";
 import { handlerGetChirps } from "./api/chirps.js";
 import { config } from "./config.js";
-import { handlerUsersCreate, handlerUsersLogin, handlerRefresh, handlerRevoke, } from "./api/users.js";
-import { handlerGetChirp } from "./api/chirps.js";
+import { handlerUsersCreate, handlerUsersLogin, handlerUsersUpdate, handlerPolkaWebhook, handlerRefresh, handlerRevoke, } from "./api/users.js";
+import { handlerGetChirp, handlerDeleteChirp } from "./api/chirps.js";
 const migrationClient = postgres(config.db.url, { max: 1 });
 await migrate(drizzle(migrationClient), config.db.migrationConfig);
 const app = express();
@@ -32,11 +32,17 @@ app.post("/api/users", (req, res, next) => {
 app.post("/api/login", (req, res, next) => {
     Promise.resolve(handlerUsersLogin(req, res)).catch(next);
 });
+app.put("/api/users", (req, res, next) => {
+    Promise.resolve(handlerUsersUpdate(req, res)).catch(next);
+});
 app.post("/api/refresh", (req, res, next) => {
     Promise.resolve(handlerRefresh(req, res)).catch(next);
 });
 app.post("/api/revoke", (req, res, next) => {
     Promise.resolve(handlerRevoke(req, res)).catch(next);
+});
+app.post("/api/polka/webhooks", (req, res, next) => {
+    Promise.resolve(handlerPolkaWebhook(req, res)).catch(next);
 });
 app.post("/api/chirps", (req, res, next) => {
     Promise.resolve(handlerChirpsCreate(req, res)).catch(next);
@@ -46,6 +52,9 @@ app.get("/api/chirps", (req, res, next) => {
 });
 app.get("/api/chirps/:chirpId", (req, res, next) => {
     Promise.resolve(handlerGetChirp(req, res)).catch(next);
+});
+app.delete("/api/chirps/:chirpId", (req, res, next) => {
+    Promise.resolve(handlerDeleteChirp(req, res)).catch(next);
 });
 app.use(errorMiddleWare);
 app.listen(config.api.port, () => {

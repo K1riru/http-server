@@ -6,15 +6,43 @@ import {
   createRefreshToken,
   getUserFromRefreshToken,
   revokeRefreshToken,
+  updateUser,
+  upgradeUserToChirpyRed,
 } from "../db/queries/users.js";
-import { createHashedPassword, hashPassword, makeJWT, makeRefreshToken, getBearerToken } from "../auth.js";
+import {
+  createHashedPassword,
+  hashPassword,
+  makeJWT,
+  makeRefreshToken,
+  getAPIKey,
+  getBearerToken,
+  validateJWT,
+} from "../auth.js";
 import { BadRequestError } from "./errors.js";
 import { respondWithJSON } from "./json.js";
 import { config } from "../config.js";
 
+function serializeUser(user: {
+  id: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isChirpyRed: boolean;
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    isChirpyRed: user.isChirpyRed,
+  };
+}
+
 export async function handlerUsersCreate(req: Request, res: Response) {
-  type parameters = Omit<Parameters<typeof createUser>[0], "hashedPassword"> & { password: string };
-  const params: parameters = req.body;
+  type CreateUserParams = Omit<Parameters<typeof createUser>[0], "hashedPassword"> & {
+    password: string;
+  };
+  const params: CreateUserParams = req.body;
 
   if (!params.email || !params.password) {
     throw new BadRequestError("Missing required fields");
@@ -27,12 +55,7 @@ export async function handlerUsersCreate(req: Request, res: Response) {
     throw new Error("Could not create user");
   }
 
-  respondWithJSON(res, 201, {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  });
+  respondWithJSON(res, 201, serializeUser(user));
 }
 
 export async function handlerUsersLogin(req: Request, res: Response) {
@@ -72,13 +95,76 @@ export async function handlerUsersLogin(req: Request, res: Response) {
   });
   // Return a copy of the user without the hashed password and include the token
   respondWithJSON(res, 200, {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-    token: token,
+    ...serializeUser(user),
+    token,
     refreshToken,
   });
+}
+
+export async function handlerUsersUpdate(req: Request, res: Response) {
+  const body = req.body as { email?: string; password?: string };
+
+  if (!body.email || !body.password) {
+    throw new BadRequestError("Missing required fields");
+  }
+
+  let userId: string;
+
+  try {
+    const token = getBearerToken(req);
+    userId = validateJWT(token, config.auth.jwtSecret);
+  } catch {
+    return res.sendStatus(401);
+  }
+
+  const hashedPassword = await createHashedPassword(body.password);
+  const user = await updateUser(userId, {
+    email: body.email,
+    hashedPassword,
+  });
+
+  if (!user) {
+    return res.sendStatus(404);
+  }
+
+  respondWithJSON(res, 200, {
+    ...serializeUser(user),
+  });
+}
+
+export async function handlerPolkaWebhook(req: Request, res: Response) {
+  try {
+    const apiKey = getAPIKey(req);
+
+    if (apiKey !== config.api.polkaKey) {
+      return res.sendStatus(401);
+    }
+  } catch {
+    return res.sendStatus(401);
+  }
+
+  const body = req.body as {
+    event?: string;
+    data?: {
+      userId?: string;
+    };
+  };
+
+  if (body.event !== "user.upgraded") {
+    return res.sendStatus(204);
+  }
+
+  if (!body.data?.userId) {
+    return res.sendStatus(404);
+  }
+
+  const user = await upgradeUserToChirpyRed(body.data.userId);
+
+  if (!user) {
+    return res.sendStatus(404);
+  }
+
+  return res.sendStatus(204);
 }
 
 export async function handlerRefresh(req: Request, res: Response) {
@@ -101,7 +187,7 @@ export async function handlerRefresh(req: Request, res: Response) {
   } catch (error) {
     if (error instanceof Error && error.message === "Missing Authorization header") {
       respondWithJSON(res, 401, "missing authorization header");
-    } else if (error instanceof Error && error.message === "Malformed autherization header") {
+    } else if (error instanceof Error && error.message === "Malformed authorization header") {
       respondWithJSON(res, 401, "malformed authorization header");
     } else {
       respondWithJSON(res, 401, "invalid refresh token");
@@ -120,7 +206,7 @@ export async function handlerRevoke(req: Request, res: Response) {
   } catch (error) {
     if (error instanceof Error && error.message === "Missing Authorization header") {
       res.sendStatus(401);
-    } else if (error instanceof Error && error.message === "Malformed autherization header") {
+    } else if (error instanceof Error && error.message === "Malformed authorization header") {
       res.sendStatus(401);
     } else {
       res.sendStatus(401);
