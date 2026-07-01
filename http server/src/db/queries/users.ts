@@ -23,15 +23,6 @@ export async function updateUser(
   return result;
 }
 
-export async function upgradeUserToChirpyRed(userId: string) {
-  const [result] = await db
-    .update(users)
-    .set({ isChirpyRed: true })
-    .where(eq(users.id, userId))
-    .returning();
-  return result;
-}
-
 export async function reset() {
   await db.delete(users);
 }
@@ -77,3 +68,4 @@ export async function revokeRefreshToken(token: string) {
     .set({ revokedAt: new Date() })
     .where(eq(refreshTokens.token, token));
 }
+

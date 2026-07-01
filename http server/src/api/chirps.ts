@@ -1,13 +1,11 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 
 import { respondWithJSON } from "./json.js";
-import {
-  createChirp,
-  deleteChirpById,
-  getAllChirps,
-  getChirpById,
-} from "../db/queries/chirps.js";
+import { createChirp } from "../db/queries/chirps.js";
 import { BadRequestError } from "./errors.js";
+import { getAllChirps } from "../db/queries/chirps.js";
+import { getChirpById } from "../db/queries/chirps.js";
+import { deleteChirpById } from "../db/queries/chirps.js";
 import { getBearerToken, validateJWT } from "../auth.js";
 import { config } from "../config.js";
 
@@ -66,81 +64,35 @@ function getCleanedBody(body: string, badWords: string[]) {
   return cleaned;
 }
 
-type Chirp = Awaited<ReturnType<typeof getAllChirps>>[number];
-type SortOrder = "asc" | "desc";
-
-export function sortChirpsByCreatedAt(chirps: Chirp[], sort: SortOrder) {
-  return [...chirps].sort((a, b) => {
-    const diff = a.createdAt.getTime() - b.createdAt.getTime();
-    return sort === "asc" ? diff : -diff;
-  });
-}
-
-export function getSortOrder(req: Request): SortOrder {
-  const sortQuery = req.query.sort;
-
-  if (typeof sortQuery === "string" && sortQuery === "desc") {
-    return "desc";
-  }
-
-  return "asc";
-}
-
-export async function handlerGetChirps(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const authorIdQuery = req.query.authorId;
-    const authorId = typeof authorIdQuery === "string" ? authorIdQuery : undefined;
-    const sortOrder = getSortOrder(req);
-    const chirps = await getAllChirps(authorId);
-
-    res.status(200).json(sortChirpsByCreatedAt(chirps, sortOrder));
-  } catch (err) {
-    next(err);
-  }
+export async function handlerGetChirps(req: Request, res: Response, next: Function) {
+    try {
+        const chirps = await getAllChirps();
+        res.status(200).json(chirps);
+    } catch (err) {
+        next(err);
+    }
 }
 
 export async function handlerGetChirp(req: Request, res: Response) {
-  const chirpId = req.params.chirpId as string;
-  const chirp = await getChirpById(chirpId);
+    const chirpId = req.params.chirpId as string;
+    const chirp = await getChirpById(chirpId);
 
-  if (!chirp) {
-    res.status(404).json({ error: "Chirp not found" });
-    return;
-  }
+    if (!chirp) {
+        res.status(404).json({ error: "Chirp not found" });
+        return;
+    }
 
-  res.status(200).json(chirp);
+    res.status(200).json(chirp);
 }
 
 export async function handlerDeleteChirp(req: Request, res: Response) {
-  let userId: string;
+    const chirpId = req.params.chirpId as string;
+    const deletedChirp = await deleteChirpById(chirpId);
 
-  try {
-    const token = getBearerToken(req);
-    userId = validateJWT(token, config.auth.jwtSecret);
-  } catch {
-    return res.sendStatus(401);
-  }
+    if (!deletedChirp || deletedChirp.body.length === 0) {
+        res.status(404).json({ error: "Chirp not found" });
+        return;
+    }
 
-  const chirpId = req.params.chirpId as string;
-  const chirp = await getChirpById(chirpId);
-
-  if (!chirp) {
-    return res.sendStatus(404);
-  }
-
-  if (chirp.userId !== userId) {
-    return res.sendStatus(403);
-  }
-
-  const deleted = await deleteChirpById(chirpId);
-
-  if (!deleted) {
-    return res.sendStatus(404);
-  }
-
-  return res.sendStatus(204);
+    res.status(204).json({ message: "Chirp deleted successfully" });
 }
