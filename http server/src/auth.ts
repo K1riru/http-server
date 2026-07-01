@@ -1,7 +1,7 @@
 import * as argon2 from "argon2";
 import crypto from "crypto";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import type { Request } from "express";
+import { Request } from "express";
 
 export async function createHashedPassword(password: string): Promise<string> {
   const hashed = await argon2.hash(password);
@@ -15,6 +15,8 @@ export function makeRefreshToken(): string {
 export function hashPassword(password: string, hash: string): Promise<boolean> {
   return argon2.verify(hash, password);
 }
+
+type payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
 function makeJWT(userID: string, expiresIn: number, secret: string): string {
   return jwt.sign(
@@ -45,13 +47,14 @@ export function getBearerToken(req: Request): string {
     throw new Error("Missing Authorization header");
   }
 
-  const parts = authHeader.trim().split(/\s+/);
+  const parts = authHeader.split(" ");
   if (parts.length !== 2 || parts[0] !== "Bearer") {
-    throw new Error("Malformed authorization header");
+    throw new Error("Malformed autherization header");
   }
 
   return parts[1];
 }
+
 
 export function getAPIKey(req: Request): string {
   const authHeader = req.get("Authorization");
@@ -60,7 +63,8 @@ export function getAPIKey(req: Request): string {
     throw new Error("Missing Authorization header");
   }
 
-  const parts = authHeader.trim().split(/\s+/);
+  const parts = authHeader.split(" ");
+
   if (parts.length !== 2 || parts[0] !== "ApiKey") {
     throw new Error("Malformed authorization header");
   }
